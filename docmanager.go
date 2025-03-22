@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 
@@ -15,8 +17,13 @@ import (
 )
 
 type Document struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
+	ID      string  `json:"id"`
+	Content string  `json:"content"`
+	FileID  *string `json:"file_id,omitempty"`
+}
+
+type ErrorResponse struct {
+	Message string `json:"message"`
 }
 
 var (
@@ -38,29 +45,60 @@ func getBlobServiceClient() (*azblob.Client, error) {
 	return client, nil
 }
 
+type DocumentForm struct {
+	Content string                `form:"content" binding:"required"`
+	File    *multipart.FileHeader `form:"file"`
+}
+
 func createDocument(c *gin.Context) {
-	var doc Document
-	if err := c.ShouldBindJSON(&doc); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var form DocumentForm
+	if err := c.ShouldBind(&form); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid form data"})
 		return
 	}
-	doc.ID = uuid.New().String()
 
+	id := uuid.New().String()
+	content := []byte(form.Content)
 	client, err := getBlobServiceClient()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
 		return
 	}
 
-	blobName := doc.ID
-	blobData := []byte(fmt.Sprintf(`{"id":"%s", "name":"%s"}`, doc.ID, doc.Content))
-	_, err = client.UploadBuffer(context.TODO(), containerName, blobName, blobData, nil)
+	containerClient := client.ServiceClient().NewContainerClient("documents")
+	blobClient := containerClient.NewBlockBlobClient(id)
+	_, err = blobClient.UploadStream(context.TODO(), io.NopCloser(bytes.NewReader(content)), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload document"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to create document: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusOK, doc)
+	var fileID *string
+	file, err := c.FormFile("file")
+	if err == nil {
+		fileName := fmt.Sprintf("%s_%s", id, file.Filename)
+		fileClient := containerClient.NewBlockBlobClient(fileName)
+		f, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to open file: %v", err)})
+			return
+		}
+		defer f.Close()
+
+		_, err = fileClient.UploadStream(context.TODO(), f, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to upload file: %v", err)})
+			return
+		}
+
+		fileID = &fileName
+	}
+
+	c.JSON(http.StatusOK, Document{
+		ID:      id,
+		Content: form.Content,
+		FileID:  fileID,
+	})
 }
 
 func getDocument(c *gin.Context) {
