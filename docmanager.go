@@ -3,19 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"io"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 )
 
 type Document struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID      string `json:"id"`
+	Content string `json:"content"`
 }
 
 var (
@@ -50,9 +51,9 @@ func createDocument(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
 		return
 	}
-	
+
 	blobName := doc.ID
-	blobData := []byte(fmt.Sprintf(`{"id":"%s", "name":"%s"}`, doc.ID, doc.Name))
+	blobData := []byte(fmt.Sprintf(`{"id":"%s", "name":"%s"}`, doc.ID, doc.Content))
 	_, err = client.UploadBuffer(context.TODO(), containerName, blobName, blobData, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload document"})
@@ -69,7 +70,7 @@ func getDocument(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
 		return
 	}
-	
+
 	blobName := id
 	resp, err := client.DownloadStream(context.TODO(), containerName, blobName, nil)
 	if err != nil {
@@ -85,7 +86,36 @@ func getDocument(c *gin.Context) {
 		return
 	}
 
-	c.Data(http.StatusOK, "application/json", data)
+	c.JSON(http.StatusOK, Document{
+		ID:      id,
+		Content: string(data),
+	})
+}
+
+func downloadDocument(c *gin.Context) {
+	id := c.Param("id")
+	client, err := getBlobServiceClient()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
+		return
+	}
+
+	blobName := id
+	resp, err := client.DownloadStream(context.TODO(), containerName, blobName, nil)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read the response body into a byte slice
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read document"})
+		return
+	}
+
+	c.Data(http.StatusOK, "application/octet-stream", data)
 }
 
 func listDocuments(c *gin.Context) {
@@ -107,8 +137,8 @@ func listDocuments(c *gin.Context) {
 
 		for _, blob := range resp.Segment.BlobItems {
 			docs = append(docs, Document{
-				ID:   *blob.Name,
-				Name: *blob.Name, // Adjust if needed based on how names are stored
+				ID:      *blob.Name,
+				Content: *blob.Name, // Adjust if needed based on how names are stored
 			})
 		}
 	}
@@ -123,10 +153,20 @@ func main() {
 
 	r := gin.Default()
 
-	r.GET("/documents", listDocuments)
+	// Add CORS middleware
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // Allow all origins
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 
-	r.POST("/document", createDocument)
-	r.GET("/document/:id", getDocument)
+	r.GET("/documents", listDocuments)
+	r.POST("/documents", createDocument)
+	r.GET("/documents/download/:id", downloadDocument)
+	r.GET("/documents/:id", getDocument)
+	r.PUT("/documents/:id", getDocument)
 
 	log.Println("Starting server on :8080")
 	r.Run(":8080")
