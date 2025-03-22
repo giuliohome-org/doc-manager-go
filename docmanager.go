@@ -58,6 +58,7 @@ func createDocument(c *gin.Context) {
 	}
 
 	id := uuid.New().String()
+	log.Println("Creating document", id)
 	content := []byte(form.Content)
 	client, err := getBlobServiceClient()
 	if err != nil {
@@ -184,6 +185,25 @@ func listDocuments(c *gin.Context) {
 	c.JSON(http.StatusOK, docs)
 }
 
+func deleteDocument(c *gin.Context) {
+	id := c.Param("id")
+	log.Println("Deleting document", id)
+	client, err := getBlobServiceClient()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
+		return
+	}
+
+	blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(id)
+	_, err = blobClient.Delete(context.TODO(), nil)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Document deleted successfully"})
+}
+
 func main() {
 	if accountName == "" || accountKey == "" || containerName == "" {
 		log.Fatal("Azure Storage credentials are not set")
@@ -205,6 +225,7 @@ func main() {
 	r.GET("/documents/download/:id", downloadDocument)
 	r.GET("/documents/:id", getDocument)
 	r.PUT("/documents/:id", getDocument)
+	r.DELETE("/documents/:id", deleteDocument)
 
 	log.Println("Starting server on :8080")
 	r.Run(":8080")
