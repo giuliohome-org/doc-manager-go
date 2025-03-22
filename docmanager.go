@@ -185,6 +185,62 @@ func listDocuments(c *gin.Context) {
 	c.JSON(http.StatusOK, docs)
 }
 
+func updateDocument(c *gin.Context) {
+	id := c.Param("id")
+	client, err := getBlobServiceClient()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
+		return
+	}
+
+	log.Println("Updating document", id)
+
+	var form DocumentForm
+	if err := c.ShouldBind(&form); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid form data"})
+		return
+	}
+
+	containerClient := client.ServiceClient().NewContainerClient("documents")
+	blobClient := containerClient.NewBlockBlobClient(id)
+	content := []byte(form.Content)
+
+	// Update the document content
+	_, err = blobClient.UploadStream(context.TODO(), io.NopCloser(bytes.NewReader(content)), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to update document: %v", err)})
+		return
+	}
+
+	var fileID *string
+	file, err := c.FormFile("file")
+	if err == nil {
+		fileName := fmt.Sprintf("%s_%s", id, file.Filename)
+		fileClient := containerClient.NewBlockBlobClient(fileName)
+
+		f, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to open file: %v", err)})
+			return
+		}
+		defer f.Close()
+
+		_, err = fileClient.UploadStream(context.TODO(), f, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Message: fmt.Sprintf("Failed to upload file: %v", err)})
+			return
+		}
+
+		fileID = &fileName
+	}
+
+	c.JSON(http.StatusOK, Document{
+		ID:      id,
+		Content: form.Content,
+		FileID:  fileID,
+	})
+}
+
 func deleteDocument(c *gin.Context) {
 	id := c.Param("id")
 	log.Println("Deleting document", id)
@@ -224,7 +280,7 @@ func main() {
 	r.POST("/documents", createDocument)
 	r.GET("/documents/download/:id", downloadDocument)
 	r.GET("/documents/:id", getDocument)
-	r.PUT("/documents/:id", getDocument)
+	r.PUT("/documents/:id", updateDocument)
 	r.DELETE("/documents/:id", deleteDocument)
 
 	log.Println("Starting server on :8080")
