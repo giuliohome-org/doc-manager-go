@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+    {{ template "head" }}
+    {{ template "styles" }}
+    <body>
+        {{ template "navbar" }}
+        
+        <div class="container">
+            <h1 class="center-text"> {{ .title }} </h1>
+            <br>
+            <table class="table">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Is File</th>
+                        <th scope="col">Edit</th>
+                        <th scope="col">Remove</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Documents}}
+                    <tr>
+                        <td id="ID-{{.ID}}" >{{.ID}}</td>
+                        <td id="DESCR-{{.ID}}">{{.Description}}</td>
+                        <td id="ISFILE-{{.ID}}">
+                            <input type="checkbox" id="checkbox-{{.ID}}" {{if .IsFile}}checked{{end}} disabled>
+                        </td>
+                        <td>
+                            <button id="edit-{{.ID}}" type="button" class="btn btn-warning" onclick="editPatient('{{.ID}}');">
+                                <i class="fas fa-edit"></i>                         
+                            </button>
+                        </td>
+                        <td>
+                            <button id="remove-{{.ID}}" type="button" class="btn btn-danger" onclick="deletePatient('{{.ID}}');">
+                                <i class="fas fa-user-times"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {{end}}
+                    
+                </tbody>
+            </table>    
+        </div>
+        <script>
+            
+
+
+        </script>
+    </body>
+    
+    
+    
+    </html>

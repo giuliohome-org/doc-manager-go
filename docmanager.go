@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/gin-contrib/cors"
@@ -17,9 +18,11 @@ import (
 )
 
 type Document struct {
-	ID      string  `json:"id"`
-	Content string  `json:"content"`
-	FileID  *string `json:"file_id,omitempty"`
+	ID          string  `json:"id"`
+	Description string  `json:"description,omitempty"`
+	IsFile      bool    `json:"is_file,omitempty"`
+	Content     string  `json:"content"`
+	FileID      *string `json:"file_id,omitempty"`
 }
 
 type ErrorResponse struct {
@@ -157,11 +160,11 @@ func downloadDocument(c *gin.Context) {
 	c.Data(http.StatusOK, "application/octet-stream", data)
 }
 
-func listDocuments(c *gin.Context) {
+func azListDocs() ([]Document, string) {
 	client, err := getBlobServiceClient()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Azure client"})
-		return
+
+		return nil, "Failed to create Azure client"
 	}
 
 	pager := client.NewListBlobsFlatPager(containerName, nil)
@@ -170,16 +173,56 @@ func listDocuments(c *gin.Context) {
 	for pager.More() {
 		resp, err := pager.NextPage(context.TODO())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list documents"})
-			return
+			return nil, "Failed to list documents"
 		}
 
 		for _, blob := range resp.Segment.BlobItems {
-			docs = append(docs, Document{
-				ID:      *blob.Name,
-				Content: *blob.Name, // Adjust if needed based on how names are stored
-			})
+			content := ""
+			IsFile := false
+			if blob.Name != nil {
+				id := *blob.Name
+				if !strings.Contains(*blob.Name, "_") {
+					log.Println("Blob name:", *blob.Name)
+					blobResp, err := client.DownloadStream(context.TODO(), containerName, *blob.Name, nil)
+					if err != nil {
+						return nil, "Failed to download blob content"
+					}
+					defer blobResp.Body.Close()
+
+					data, err := io.ReadAll(blobResp.Body)
+					if err != nil {
+						return nil, "Failed to read blob content"
+					}
+					content = string(data)
+				} else {
+					parts := strings.SplitN(*blob.Name, "_", 2)
+					content = parts[1]
+					id = parts[0]
+					IsFile = true
+				}
+
+				docs = append(docs, Document{
+					ID:      id,
+					Content: content, // Adjust if needed based on how names are stored
+					Description: func() string {
+						if len(content) < 30 {
+							return content
+						}
+						return content[:30] + "..."
+					}(),
+					IsFile: IsFile,
+				})
+			}
 		}
+	}
+
+	return docs, ""
+}
+
+func listDocuments(c *gin.Context) {
+	docs, err := azListDocs()
+	if err != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
 	}
 
 	c.JSON(http.StatusOK, docs)
@@ -260,6 +303,20 @@ func deleteDocument(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Document deleted successfully"})
 }
 
+func mainIndex(c *gin.Context) {
+	// var Documents []Document
+	docs, err := azListDocs()
+	if err != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	c.HTML(http.StatusOK, "index.tmpl", gin.H{
+		"title":     "Documents",
+		"Documents": docs,
+	})
+}
+
 func main() {
 	if accountName == "" || accountKey == "" || containerName == "" {
 		log.Fatal("Azure Storage credentials are not set")
@@ -276,12 +333,18 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	r.GET("/documents", listDocuments)
-	r.POST("/documents", createDocument)
-	r.GET("/documents/download/:id", downloadDocument)
-	r.GET("/documents/:id", getDocument)
-	r.PUT("/documents/:id", updateDocument)
-	r.DELETE("/documents/:id", deleteDocument)
+	r.LoadHTMLGlob("templates/*")
+	r.GET("/", mainIndex)
+
+	apiRoutes := r.Group("/api")
+	{
+		apiRoutes.GET("/documents", listDocuments)
+		apiRoutes.POST("/documents", createDocument)
+		apiRoutes.GET("/documents/download/:id", downloadDocument)
+		apiRoutes.GET("/documents/:id", getDocument)
+		apiRoutes.PUT("/documents/:id", updateDocument)
+		apiRoutes.DELETE("/documents/:id", deleteDocument)
+	}
 
 	log.Println("Starting server on :8080")
 	r.Run(":8080")

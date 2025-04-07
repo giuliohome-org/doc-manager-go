@@ -1,0 +1,49 @@
+{{ define "styles" }}
+
+<style>
+
+/* Centers text */
+.center-text {
+    text-align: center;
+}
+
+/* Justifies Content */
+.justify-content{
+    justify-content: center;
+    align-items: center;
+}
+
+/* Makes images responsive */
+.img-responsive {
+    width: 100%; 
+    height: 100%; 
+    object-fit: contain;
+}
+
+/*Useful when debugging CSS/Bootstrap margins*/
+.show-border{
+    border: 1px dotted red;
+}
+
+/* Sets text to white */
+.white-text{
+    color: white;
+}
+
+/* Centers HTML elements */
+.center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 50%;
+}
+ 
+/* Makes certain html elements scrollables */
+.scrollable {
+    overflow-y:scroll; 
+    overflow-x:hidden; 
+    height:600px;
+}
+
+</style>
+{{end}}
