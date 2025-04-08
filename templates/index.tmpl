@@ -8,6 +8,8 @@
         <div class="container">
             <h1 class="center-text"> {{ .title }} </h1>
             <br>
+            {{ template "add_document" }}
+            {{ template "edit_document" }}
             <table class="table">
                 <thead class="thead-dark">
                     <tr>
@@ -21,18 +23,24 @@
                 <tbody>
                     {{range .Documents}}
                     <tr>
-                        <td id="ID-{{.ID}}" >{{.ID}}</td>
+                        <td id="ID-{{.ID}}" >{{.MainID}}</td>
                         <td id="DESCR-{{.ID}}">{{.Description}}</td>
                         <td id="ISFILE-{{.ID}}">
                             <input type="checkbox" id="checkbox-{{.ID}}" {{if .IsFile}}checked{{end}} disabled>
                         </td>
                         <td>
-                            <button id="edit-{{.ID}}" type="button" class="btn btn-warning" onclick="editPatient('{{.ID}}');">
+                            {{if not .IsFile}}
+                            <button id="edit-{{.ID}}" type="button" class="btn btn-warning" onclick="editDocument('{{.ID}}');">
                                 <i class="fas fa-edit"></i>                         
                             </button>
+                            {{else}}
+                            <button id="download-{{.ID}}" type="button" class="btn btn-success" onclick="downloadDocument('{{.ID}}');">
+                                <i class="fas fa-download"></i>                         
+                            </button>
+                            {{end}}
                         </td>
                         <td>
-                            <button id="remove-{{.ID}}" type="button" class="btn btn-danger" onclick="deletePatient('{{.ID}}');">
+                            <button id="remove-{{.ID}}" type="button" class="btn btn-danger" onclick="deleteDocument('{{.ID}}');">
                                 <i class="fas fa-user-times"></i>
                             </button>
                         </td>
@@ -43,8 +51,70 @@
             </table>    
         </div>
         <script>
-            
+            function editDocument(documentID)
+            {
+               
+                var id = document.getElementById(`ID-${documentID}`).innerText;
+                var description = document.getElementById(`DESCR-${documentID}`).innerText;
+                
+                document.getElementById("editDescriptionId").value = description;
+                document.getElementById("editContentId").value = '';
 
+                document.getElementById("editDocumentId").value = documentID;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", `/api/documents/${id}`, true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        var response = JSON.parse(xhr.responseText);
+                        document.getElementById("editContentId").value = response.content || '';
+                        $('#editUserModalId').modal('toggle');
+                    } else if (xhr.readyState === 4) {
+                        console.error("Error fetching document data:", xhr.statusText);
+                        alert("An error occurred while fetching document data. Please try again later.");
+                    }
+                };
+                xhr.send();
+            }
+
+            function updateDocument()
+            {
+                id = document.getElementById("editDocumentId").value;
+                var data = {
+                    description: document.getElementById("editDescriptionId").value,
+                    content: document.getElementById("editContentId").value,
+                };
+
+                var json = JSON.stringify(data);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open("PUT", `/api/documents/${id}`);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(json);
+            
+                document.getElementById("editCancelModalBtnId").click();
+            
+                location.reload();
+                return false;
+            }
+
+            function deleteDocument(documentID)
+            {
+                var data = {
+                    id: documentID,
+                };
+                var json = JSON.stringify(data);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open("DELETE", `/api/documents/${documentID}`);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(json);
+
+                location.reload();
+                return false;
+
+            }
 
         </script>
     </body>

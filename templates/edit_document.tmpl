@@ -1,0 +1,38 @@
+{{define "edit_document"}}
+
+<!-- Modal -->
+<div class="modal fade" id="editUserModalId" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editUserLabel">Add Document</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form>
+      <div class="modal-body">
+        
+          <div class="form-group">
+            <label for="nameId">Description</label>
+            <input class="form-control" name="Name" id="editDescriptionId" placeholder="Enter Description">
+          </div>
+          <div class="form-group">
+        <label for="editContentId">Content</label>
+        <textarea class="form-control" name="Content" id="editContentId" placeholder="Enter Content" rows="10"></textarea>
+          </div>
+          
+          <input type="hidden" id="editDocumentId" name="ID" value="">
+
+
+      </div>
+      <div class="modal-footer">
+        <button id="editCancelModalBtnId" type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onClick="updateDocument();">Update Document</button>
+      </div>
+        </form>
+    </div>
+  </div>
+</div>
+
+{{end}}}

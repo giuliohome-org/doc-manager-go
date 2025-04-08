@@ -19,6 +19,7 @@ import (
 
 type Document struct {
 	ID          string  `json:"id"`
+	MainID      string  `json:"main_id"`
 	Description string  `json:"description,omitempty"`
 	IsFile      bool    `json:"is_file,omitempty"`
 	Content     string  `json:"content"`
@@ -182,7 +183,6 @@ func azListDocs() ([]Document, string) {
 			if blob.Name != nil {
 				id := *blob.Name
 				if !strings.Contains(*blob.Name, "_") {
-					log.Println("Blob name:", *blob.Name)
 					blobResp, err := client.DownloadStream(context.TODO(), containerName, *blob.Name, nil)
 					if err != nil {
 						return nil, "Failed to download blob content"
@@ -202,7 +202,8 @@ func azListDocs() ([]Document, string) {
 				}
 
 				docs = append(docs, Document{
-					ID:      id,
+					ID:      *blob.Name,
+					MainID:  id,
 					Content: content, // Adjust if needed based on how names are stored
 					Description: func() string {
 						if len(content) < 30 {
