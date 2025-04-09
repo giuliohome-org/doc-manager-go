@@ -20,8 +20,13 @@
           <div class="form-group">
         <label for="contentId">Content</label>
         <textarea class="form-control" name="Content" id="contentId" placeholder="Enter Content" rows="10"></textarea>
-          </div>
-
+       </div>
+        
+        <div class="form-group">
+        <label for="fileId">Upload File</label>
+        <input type="file" id="fileId" class="form-control-file" placeholder="Upload File">
+        <button type="button" class="btn btn-warning" onclick="document.getElementById('fileId').value = '';">Reset File</button>
+        </div>
       </div>
       <div class="modal-footer">
         <button id="cancelModalBtnId" type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -37,20 +42,52 @@
 function sendDocument() {
     var data = {
         description: document.getElementById("descriptionId").value,
-        content: document.getElementById("contentId").value,
+        content: document.getElementById("contentId").value
     };
-
-    var json = JSON.stringify(data);
+    if (document.getElementById("fileId").files.length > 0) {
+        data.file = document.getElementById("fileId").files[0];
+    }
+    if (document.getElementById("fileId").value == "") {
+        data.file = null;
+    }
 
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/documents");
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.send(json);
 
-    document.getElementById("cancelModalBtnId").click();
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        console.log("Document added successfully");
+      } else {
+        console.error("Error adding document:", xhr.statusText);
+        alert("An error occurred while adding the document. Please try again later.");
+      }
+      document.getElementById("cancelModalBtnId").click();
 
-    location.reload();
-    return false;
+      location.reload();
+      return false;
+    };
+    xhr.onerror = function() {
+      console.error("Network error occurred while adding document");
+      alert("A network error occurred while adding the document. Please check your connection and try again.");
+    };
+
+    if (data.file) {
+      var formData = new FormData();
+      formData.append("description", data.description);
+      formData.append("content", data.content);
+      formData.append("file", data.file);
+
+      xhr.send(formData);
+    } else {
+      xhr.setRequestHeader("Content-Type", "application/json");
+      var json = JSON.stringify({
+        description: data.description,
+        content: data.content
+      });
+      xhr.send(json);
+    }
+
+
 }
 
 
