@@ -51,6 +51,26 @@
             </table>    
         </div>
         <script>
+            function downloadDocument(documentID) 
+            {
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", `/api/documents/download/${documentID}`, true);
+                xhr.responseType = 'blob';
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        var blob = new Blob([xhr.response], { type: xhr.getResponseHeader('Content-Type') });
+                        var link = document.createElement('a');
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = `document_${documentID}`; // Adjust the filename as needed
+                        link.click();
+                    } else {
+                        console.error("Error downloading document:", xhr.statusText);
+                        alert("An error occurred while downloading the document. Please try again later.");
+                    }
+                };
+                xhr.send();
+            }
+
             function editDocument(documentID)
             {
                
